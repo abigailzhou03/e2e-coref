@@ -77,9 +77,10 @@ class CorefModel(object):
       while True:
         random.shuffle(train_examples)
         for example in train_examples:
-          tensorized_example = self.tensorize_example(example, is_training=True)
-          feed_dict = dict(zip(self.queue_input_tensors, tensorized_example))
-          session.run(self.enqueue_op, feed_dict=feed_dict)
+          if self.is_example_supported(example):
+            tensorized_example = self.tensorize_example(example, is_training=True)
+            feed_dict = dict(zip(self.queue_input_tensors, tensorized_example))
+            session.run(self.enqueue_op, feed_dict=feed_dict)
     enqueue_thread = threading.Thread(target=_enqueue_loop)
     enqueue_thread.daemon = True
     enqueue_thread.start()
@@ -118,6 +119,10 @@ class CorefModel(object):
     else:
       starts, ends, labels = [], [], []
     return np.array(starts), np.array(ends), np.array([label_dict[c] for c in labels])
+
+  def is_example_supported(self, example):
+    doc_key = example["doc_key"]
+    return doc_key[:2] in self.genres
 
   def tensorize_example(self, example, is_training):
     clusters = example["clusters"]
@@ -536,7 +541,7 @@ class CorefModel(object):
         example = json.loads(line)
         return self.tensorize_example(example, is_training=False), example
       with open(self.config["eval_path"]) as f:
-        self.eval_data = [load_line(l) for l in f.readlines()]
+        self.eval_data = [load_line(l) for l in f.readlines() if self.is_example_supported(json.loads(l))]
       num_words = sum(tensorized_example[2].sum() for tensorized_example, _ in self.eval_data)
       print("Loaded {} eval examples.".format(len(self.eval_data)))
 
